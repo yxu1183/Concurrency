@@ -39,22 +39,22 @@
 #define CLASSD 3
 #define CLASSE 4
 
-/* TODO */
-/* Add your synchronization variables here */
+//Lock and unlock the mutex by finding a critical region, lock after critical region starts, meaning before that line of codes , and unlock after the critical region, meaning after that lines of code
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+// use by calling 
+// pthread_mutex_lock(&mutex);
+// pthread_mutex_unlock(&mutex);
 
-/* Basic information about simulation.  They are printed/checked at the end 
- * and in assert statements during execution.
- *
- * You are responsible for maintaining the integrity of these variables in the 
- * code that you develop. 
- */
+//Variable that unblocks atleast one of the thread that are blocked on specific condition 
+pthread_cond_t prof_inside = PTHREAD_COND_INITIALIZER;
+
 
 static int students_in_office;   /* Total numbers of students currently in the office */
 static int classa_inoffice;      /* Total numbers of students from class A currently in the office */
 static int classb_inoffice;      /* Total numbers of students from class B in the office */
-static int students_since_break = 0;
 
-
+static int students_since_break = 0; /*students after the break*/
+static int prof_office = 0; /*professor if not inside the office*/
 typedef struct 
 {
   int arrival_time;  // time between the arrival of this student and the previous student
@@ -120,15 +120,36 @@ void *professorthread(void *junk)
   /* Loop while waiting for students to arrive. */
   while (1) 
   {
+    //critical region starts
+    //lock access to shared variables
+    
+    if(pthread_mutex_lock(&mutex)!=0)
+    {
+      perror("Mutex cannot be locked by professor.");
+      exit(0); //exit if mutex lock is unsucessful
+    }
 
-    /* TODO */
-    /* Add code here to handle the student's request.             */
-    /* Currently the body of the loop is empty. There's           */
-    /* no communication between professor and students, i.e. all  */
-    /* students are admitted without regard of the number         */ 
-    /* of available seats, which class a student is in,           */
-    /* and whether the professor needs a break. You need to add   */
-    /* all of this.                                               */
+    //Condition to check if professor can take a break
+    if((students_since_break >= professor_LIMIT||(prof_office!=0)) &&(students_in_office == 0))
+    {
+      take_break();
+      pthread_cond_signal(&prof_inside);//lock the thread - Professor is in break.
+    }
+
+    //check if professor can come 
+    if(prof_office!=0)
+    {
+      prof_office = 1;
+      pthread_cond_signal(&prof_inside);//lock the thread - Professor is not in the office.
+    }
+
+    //End of critical region
+    //Unlock access to shared variables
+    if(pthread_mutex_unlock(&mutex)!=0)
+    {
+      perror("Mutex cannnot be unlocked by professor");
+      exit(0); //exit if the mutex unlock is unsucessful
+    }
 
   }
   pthread_exit(NULL);
