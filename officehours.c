@@ -32,6 +32,7 @@
 #define MAX_SEATS 3        /* Number of seats in the professor's office */
 #define professor_LIMIT 10 /* Number of students the professor can help before he needs a break */
 #define MAX_STUDENTS 1000  /* Maximum number of students in the simulation */
+#define MAX_CLASSAB 5 /*Maximum number of students from class A & B who can enter the office consecutively*/
 
 #define CLASSA 0
 #define CLASSB 1
@@ -39,22 +40,20 @@
 #define CLASSD 3
 #define CLASSE 4
 
-//Lock and unlock the mutex by finding a critical region, lock after critical region starts, meaning before that line of codes , and unlock after the critical region, meaning after that lines of code
+//Lock and unlock the mutex by finding a critical region, lock before critical region starts, and unlock after the critical region ends
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-// use by calling 
-// pthread_mutex_lock(&mutex);
-// pthread_mutex_unlock(&mutex);
 
-//Variable that unblocks atleast one of the thread that are blocked on specific condition 
+//Condition Variable that signals if professor is inside the office
 pthread_cond_t prof_inside = PTHREAD_COND_INITIALIZER;
-
 
 static int students_in_office;   /* Total numbers of students currently in the office */
 static int classa_inoffice;      /* Total numbers of students from class A currently in the office */
 static int classb_inoffice;      /* Total numbers of students from class B in the office */
 
 static int students_since_break = 0; /*students after the break*/
-static int prof_office = 0; /*professor if not inside the office*/
+static int prof_office; /*professor if not inside the office*/
+static int cont_classa; /*consecutive students from class A*/
+static int cont_classb; /*consecutive students from class B*/
 typedef struct 
 {
   int arrival_time;  // time between the arrival of this student and the previous student
@@ -73,11 +72,9 @@ static int initialize(student_info *si, char *filename)
   classa_inoffice = 0;
   classb_inoffice = 0;
   students_since_break = 0;
-
-  /* Initialize your synchronization variables (and 
-   * other variables you might use) here
-   */
-
+  prof_office = 0;
+  cont_classa = 0;
+  cont_classb = 0;
 
   /* Read in the data file and initialize the student array */
   FILE *fp;
@@ -125,7 +122,7 @@ void *professorthread(void *junk)
     
     if(pthread_mutex_lock(&mutex)!=0)
     {
-      perror("Mutex cannot be locked by professor.");
+      perror("Professor didn't lock the mutex.\n");
       exit(0); //exit if mutex lock is unsucessful
     }
 
@@ -147,7 +144,7 @@ void *professorthread(void *junk)
     //Unlock access to shared variables
     if(pthread_mutex_unlock(&mutex)!=0)
     {
-      perror("Mutex cannnot be unlocked by professor");
+      perror("Professor didn't unlock the mutex.\n");
       exit(0); //exit if the mutex unlock is unsucessful
     }
 
@@ -163,10 +160,18 @@ void *professorthread(void *junk)
 void classa_enter() 
 {
 
-  /* TODO */
-  /* Request permission to enter the office.  You might also want to add  */
-  /* synchronization for the simulations variables below                  */
-  /*  YOUR CODE HERE.                                                     */ 
+  //critical region begins
+  //lock acess to shared variables
+
+  if(pthread_mutex_lock(&mutex)!=0)
+  {
+    perror("Student from class A didn't lock the mutex.\n");
+    exit(0); //exit if mutex lock is unsucessful
+  }
+
+
+
+
 
   students_in_office += 1;
   students_since_break += 1;
@@ -208,10 +213,16 @@ static void ask_questions(int t)
  */
 static void classa_leave() 
 {
-  /* 
-   *  TODO
-   *  YOUR CODE HERE. 
-   */
+  //critical region begins
+  //lock access to shared variables
+
+  if(pthread_mutex_lock(&mutex)!=0)
+  {
+    perror("Student from class A didn't lock the mutex.\n");
+    exit(0); //exit if mutex lock is unsucessful
+  }
+
+
 
   students_in_office -= 1;
   classa_inoffice -= 1;
