@@ -17,7 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-  
+
 #include <pthread.h>
 #include <semaphore.h>
 #include <unistd.h>
@@ -32,13 +32,10 @@
 #define MAX_SEATS 3        /* Number of seats in the professor's office */
 #define professor_LIMIT 10 /* Number of students the professor can help before he needs a break */
 #define MAX_STUDENTS 1000  /* Maximum number of students in the simulation */
-#define MAX_CLASSAB 5 /*Maximum number of students from class A & B who can enter the office consecutively*/
+#define MAX_CLASSAB 5      /*Maximum number of students from class A & B who can enter the office consecutively*/
 
 #define CLASSA 0
 #define CLASSB 1
-#define CLASSC 2
-#define CLASSD 3
-#define CLASSE 4
 
 /*
   Lock and unlock the mutex by finding a critical region, 
@@ -53,15 +50,18 @@ pthread_cond_t prof_inside = PTHREAD_COND_INITIALIZER;
 //Condition Variable that signals if the student comes out of the office.
 pthread_cond_t student_out = PTHREAD_COND_INITIALIZER;
 
-static int students_in_office;   /* Total numbers of students currently in the office */
-static int classa_inoffice;      /* Total numbers of students from class A currently in the office */
-static int classb_inoffice;      /* Total numbers of students from class B in the office */
+static int students_in_office; /* Total numbers of students currently in the office */
+static int classa_inoffice;    /* Total numbers of students from class A currently in the office */
+static int classb_inoffice;    /* Total numbers of students from class B in the office */
 
 static int students_since_break = 0; /*students after the break*/
-static int prof_office; /*professor if not inside the office*/
-// static int cont_classa; /*consecutive students from class A*/
-// static int cont_classb; /*consecutive students from class B*/
-typedef struct 
+static int prof_office;              /*professor if not inside the office*/
+static int cont_classa;              /*consecutive students from class A*/
+static int cont_classb;              /*consecutive students from class B*/
+static int wait_classa;              /*students from class A waiting outside*/
+static int wait_classb;              /*students from class B waiting outside*/
+
+typedef struct
 {
   int arrival_time;  // time between the arrival of this student and the previous student
   int question_time; // time the student needs to spend with the professor
@@ -73,162 +73,180 @@ typedef struct
  * TODO: Create/initialize all synchronization
  * variables and other global variables that you add.
  */
-static int initialize(student_info *si, char *filename) 
+static int initialize(student_info *si, char *filename)
 {
   students_in_office = 0;
   classa_inoffice = 0;
   classb_inoffice = 0;
   students_since_break = 0;
   prof_office = 0;
-  // cont_classa = 0;
-  // cont_classb = 0;
+  cont_classa = 0;
+  cont_classb = 0;
+  wait_classa = 0;
+  wait_classb = 0;
 
   /* Read in the data file and initialize the student array */
   FILE *fp;
 
-  if((fp=fopen(filename, "r")) == NULL) 
+  if ((fp = fopen(filename, "r")) == NULL)
   {
     printf("Cannot open input file %s for reading.\n", filename);
     exit(1);
   }
 
   int i = 0;
-  while ( (fscanf(fp, "%d%d%d\n", &(si[i].class), &(si[i].arrival_time), &(si[i].question_time))!=EOF) && 
-           i < MAX_STUDENTS ) 
+  while ((fscanf(fp, "%d%d%d\n", &(si[i].class), &(si[i].arrival_time),
+                 &(si[i].question_time)) != EOF) &&
+         i < MAX_STUDENTS)
   {
     i++;
   }
 
- fclose(fp);
- return i;
+  fclose(fp);
+  return i;
 }
 
 /* Code executed by professor to simulate taking a break 
  * You do not need to add anything here.  
  */
-static void take_break() 
+static void take_break()
 {
   printf("The professor is taking a break now.\n");
   sleep(5);
-  assert( students_in_office == 0 );
+  assert(students_in_office == 0);
   students_since_break = 0;
 }
 
-/* Code for the professor thread. This is fully implemented except for synchronization
- * with the students.  See the comments within the function for details.
+/* Code for the professor thread.This is fully implemented except for synchronization
+ * with the students.See the comments within the function for details.
  */
-void *professorthread(void *junk) 
+void *professorthread(void *junk)
 {
   printf("The professor arrived and is starting his office hours\n");
 
   /* Loop while waiting for students to arrive. */
-  while (1) 
+  while (1)
   {
     //critical region starts
     //lock access to shared variables
-    
-    if(pthread_mutex_lock(&mutex)!=0)
-    {
-      perror("Professor didn't lock the mutex.\n");
-      exit(0); //exit if mutex lock is unsucessful
-    }
+    pthread_mutex_lock(&mutex);
 
     //Condition to check if professor can take a break
-    if((students_since_break >= professor_LIMIT||(prof_office!=0)) &&(students_in_office == 0))
+    if ((students_since_break >= professor_LIMIT ||
+         !prof_office) &&
+        (students_in_office == 0))
     {
       take_break();
-      pthread_cond_signal(&prof_inside);//lock the thread - Professor is in break.
+      /*lock the thread - Professor is in break.*/
+      pthread_cond_signal(&prof_inside);
     }
 
-    //check if professor can come 
-    if(prof_office!=0)
+    //check if professor can come
+    if (prof_office != 0)
     {
       prof_office = 1;
-      pthread_cond_signal(&prof_inside);//lock the thread - Professor is not in the office.
+      /*lock the thread - Professor is not in the office.*/
+      pthread_cond_signal(&prof_inside);
     }
 
     //End of critical region
     //Unlock access to shared variables
-    if(pthread_mutex_unlock(&mutex)!=0)
-    {
-      perror("Professor didn't unlock the mutex.\n");
-      exit(0); //exit if the mutex unlock is unsucessful
-    }
-
+    pthread_mutex_unlock(&mutex);
   }
   pthread_exit(NULL);
 }
-
 
 /* Code executed by a class A student to enter the office.
  * You have to implement this.  Do not delete the assert() statements,
  * but feel free to add your own.
  */
-void classa_enter() 
+void classa_enter()
 {
-
   //critical region begins
   //lock acess to shared variables
+  pthread_mutex_lock(&mutex);
 
-  if(pthread_mutex_lock(&mutex)!=0)
+  wait_classa = wait_classa + 1;
+
+  //Students need to wait until professor is available
+  while (students_since_break >= professor_LIMIT || !prof_office)
   {
-    perror("Student from class A didn't lock the mutex.\n");
-    exit(0); //exit if mutex lock is unsucessful
+    pthread_cond_wait(&prof_inside, &mutex);
   }
 
-
-
-
+  //Students need to wait until they are allowed to enter
+  while (!((students_in_office < MAX_SEATS) && 
+        ((wait_classb == 0) || (cont_classa < MAX_CLASSAB)) && 
+        (!classb_inoffice)))
+  {
+    pthread_cond_wait(&student_out,&mutex);
+  }
 
   students_in_office += 1;
   students_since_break += 1;
   classa_inoffice += 1;
+  cont_classb = 0;
+  cont_classa += 1;
+  wait_classa -= 1;
 
+  pthread_mutex_unlock(&mutex);
 }
 
 /* Code executed by a class B student to enter the office.
  * You have to implement this.  Do not delete the assert() statements,
  * but feel free to add your own.
  */
-void classb_enter() 
+void classb_enter()
 {
+//  //critical region begins
+//   //lock acess to shared variables
+//   pthread_mutex_lock(&mutex);
 
-  /* TODO */
-  /* Request permission to enter the office.  You might also want to add  */
-  /* synchronization for the simulations variables below                  */
-  /*  YOUR CODE HERE.                                                     */ 
+//   wait_classb = wait_classb + 1;
 
+//   //Students need to wait until professor is available
+//   while (students_since_break >= professor_LIMIT || !prof_office)
+//   {
+//     pthread_cond_wait(&prof_inside, &mutex);
+//   }
 
-  students_in_office += 1;
-  students_since_break += 1;
-  classb_inoffice += 1;
+//   //Students need to wait until they are allowed to enter
+//   while (!((students_in_office < MAX_SEATS) && 
+//         ((wait_classa == 0) || (cont_classb < MAX_CLASSAB)) && 
+//         (!classa_inoffice)))
+//   {
+//     pthread_cond_wait();
+//   }
 
+//   students_in_office += 1;
+//   students_since_break += 1;
+//   classa_inoffice += 1;
+//   cont_classa = 0;
+//   cont_classb += 1;
+//   wait_classb -= 1;
+
+//   pthread_mutex_unlock(&mutex);
 }
 
 /* Code executed by a student to simulate the time he spends in the office asking questions
  * You do not need to add anything here.  
  */
-static void ask_questions(int t) 
+static void ask_questions(int t)
 {
   sleep(t);
 }
-
 
 /* Code executed by a class A student when leaving the office.
  * You need to implement this.  Do not delete the assert() statements,
  * but feel free to add as many of your own as you like.
  */
-static void classa_leave() 
+static void classa_leave()
 {
   //critical region begins
   //lock access to shared variables
 
-  if(pthread_mutex_lock(&mutex)!=0)
-  {
-    perror("Student from class A didn't lock the mutex.\n");
-    exit(0); //exit if mutex lock is unsucessful
-  }
-  
+  pthread_mutex_lock(&mutex);
+
   students_in_office -= 1;
   classa_inoffice -= 1;
 
@@ -236,28 +254,20 @@ static void classa_leave()
 
   //End of critical region
   //Unlock access to shared variables
-  if(pthread_mutex_unlock(&mutex)!=0)
-  {
-    perror("Student from class A didn't unlock the mutex.\n");
-    exit(0); //exit if mutex lock is unsucessful
-  }
+  pthread_mutex_unlock(&mutex);
 }
 
 /* Code executed by a class B student when leaving the office.
  * You need to implement this.  Do not delete the assert() statements,
  * but feel free to add as many of your own as you like.
  */
-static void classb_leave() 
+static void classb_leave()
 {
   //critical region begins
   //lock access to shared variables
 
-  if(pthread_mutex_lock(&mutex)!=0)
-  {
-    perror("Student from class B didn't lock the mutex.\n");
-    exit(0); //exit if mutex lock is unsucessful
-  }
-  
+  pthread_mutex_lock(&mutex);
+
   students_in_office -= 1;
   classa_inoffice -= 1;
 
@@ -265,20 +275,16 @@ static void classb_leave()
 
   //End of critical region
   //Unlock access to shared variables
-  if(pthread_mutex_unlock(&mutex)!=0)
-  {
-    perror("Student from class B didn't unlock the mutex.\n");
-    exit(0); //exit if mutex lock is unsucessful
-  }
+  pthread_mutex_unlock(&mutex);
 }
 
 /* Main code for class A student threads.  
  * You do not need to change anything here, but you can add
  * debug statements to help you during development/debugging.
  */
-void* classa_student(void *si) 
+void *classa_student(void *si)
 {
-  student_info *s_info = (student_info*)si;
+  student_info *s_info = (student_info *)si;
 
   /* enter office */
   classa_enter();
@@ -288,15 +294,15 @@ void* classa_student(void *si)
   assert(students_in_office <= MAX_SEATS && students_in_office >= 0);
   assert(classa_inoffice >= 0 && classa_inoffice <= MAX_SEATS);
   assert(classb_inoffice >= 0 && classb_inoffice <= MAX_SEATS);
-  assert(classb_inoffice == 0 );
-  
+  assert(classb_inoffice == 0);
+
   /* ask questions  --- do not make changes to the 3 lines below*/
   printf("Student %d from class A starts asking questions for %d minutes\n", s_info->student_id, s_info->question_time);
   ask_questions(s_info->question_time);
   printf("Student %d from class A finishes asking questions and prepares to leave\n", s_info->student_id);
 
   /* leave office */
-  classa_leave();  
+  classa_leave();
 
   printf("Student %d from class A leaves the office\n", s_info->student_id);
 
@@ -311,9 +317,9 @@ void* classa_student(void *si)
  * You do not need to change anything here, but you can add
  * debug statements to help you during development/debugging.
  */
-void* classb_student(void *si) 
+void *classb_student(void *si)
 {
-  student_info *s_info = (student_info*)si;
+  student_info *s_info = (student_info *)si;
 
   /* enter office */
   classb_enter();
@@ -323,14 +329,14 @@ void* classb_student(void *si)
   assert(students_in_office <= MAX_SEATS && students_in_office >= 0);
   assert(classb_inoffice >= 0 && classb_inoffice <= MAX_SEATS);
   assert(classa_inoffice >= 0 && classa_inoffice <= MAX_SEATS);
-  assert(classa_inoffice == 0 );
+  assert(classa_inoffice == 0);
 
   printf("Student %d from class B starts asking questions for %d minutes\n", s_info->student_id, s_info->question_time);
   ask_questions(s_info->question_time);
   printf("Student %d from class B finishes asking questions and prepares to leave\n", s_info->student_id);
 
   /* leave office */
-  classb_leave();        
+  classb_leave();
 
   printf("Student %d from class B leaves the office\n", s_info->student_id);
 
@@ -345,7 +351,7 @@ void* classb_student(void *si)
  * at the end.
  * GUID: 355F4066-DA3E-4F74-9656-EF8097FBC985
  */
-int main(int nargs, char **args) 
+int main(int nargs, char **args)
 {
   int i;
   int result;
@@ -356,14 +362,14 @@ int main(int nargs, char **args)
   pthread_t student_tid[MAX_STUDENTS];
   student_info s_info[MAX_STUDENTS];
 
-  if (nargs != 2) 
+  if (nargs != 2)
   {
     printf("Usage: officehour <name of inputfile>\n");
     return EINVAL;
   }
 
   num_students = initialize(s_info, args[1]);
-  if (num_students > MAX_STUDENTS || num_students <= 0) 
+  if (num_students > MAX_STUDENTS || num_students <= 0)
   {
     printf("Error:  Bad number of student threads. "
            "Maybe there was a problem with your input file?\n");
@@ -371,22 +377,22 @@ int main(int nargs, char **args)
   }
 
   printf("Starting officehour simulation with %d students ...\n",
-    num_students);
+         num_students);
 
   result = pthread_create(&professor_tid, NULL, professorthread, NULL);
 
-  if (result) 
+  if (result)
   {
     printf("officehour:  pthread_create failed for professor: %s\n", strerror(result));
     exit(1);
   }
 
-  for (i=0; i < num_students; i++) 
+  for (i = 0; i < num_students; i++)
   {
 
     s_info[i].student_id = i;
     sleep(s_info[i].arrival_time);
-                
+
     student_type = random() % 2;
 
     if (s_info[i].class == CLASSA)
@@ -398,16 +404,16 @@ int main(int nargs, char **args)
       result = pthread_create(&student_tid[i], NULL, classb_student, (void *)&s_info[i]);
     }
 
-    if (result) 
+    if (result)
     {
-      printf("officehour: thread_fork failed for student %d: %s\n", 
-            i, strerror(result));
+      printf("officehour: thread_fork failed for student %d: %s\n",
+             i, strerror(result));
       exit(1);
     }
   }
 
   /* wait for all student threads to finish */
-  for (i = 0; i < num_students; i++) 
+  for (i = 0; i < num_students; i++)
   {
     pthread_join(student_tid[i], &status);
   }
@@ -419,4 +425,3 @@ int main(int nargs, char **args)
 
   return 0;
 }
-
