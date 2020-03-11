@@ -249,14 +249,27 @@ static void classa_leave()
  */
 static void classb_leave() 
 {
-  /* 
-   * TODO
-   * YOUR CODE HERE. 
-   */
+  //critical region begins
+  //lock access to shared variables
 
+  if(pthread_mutex_lock(&mutex)!=0)
+  {
+    perror("Student from class B didn't lock the mutex.\n");
+    exit(0); //exit if mutex lock is unsucessful
+  }
+  
   students_in_office -= 1;
-  classb_inoffice -= 1;
+  classa_inoffice -= 1;
 
+  pthread_cond_signal(&student_out);
+
+  //End of critical region
+  //Unlock access to shared variables
+  if(pthread_mutex_unlock(&mutex)!=0)
+  {
+    perror("Student from class B didn't unlock the mutex.\n");
+    exit(0); //exit if mutex lock is unsucessful
+  }
 }
 
 /* Main code for class A student threads.  
