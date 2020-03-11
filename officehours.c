@@ -55,11 +55,11 @@ static int classa_inoffice;    /* Total numbers of students from class A current
 static int classb_inoffice;    /* Total numbers of students from class B in the office */
 
 static int students_since_break = 0; /*students after the break*/
-static int prof_office;              /*professor if not inside the office*/
+int prof_office = 0;             /*professor if not inside the office*/
 static int cont_classa;              /*consecutive students from class A*/
 static int cont_classb;              /*consecutive students from class B*/
-static int wait_classa;              /*students from class A waiting outside*/
-static int wait_classb;              /*students from class B waiting outside*/
+int wait_classa = 0;              /*students from class A waiting outside*/
+int wait_classb = 0;              /*students from class B waiting outside*/
 
 typedef struct
 {
@@ -79,11 +79,9 @@ static int initialize(student_info *si, char *filename)
   classa_inoffice = 0;
   classb_inoffice = 0;
   students_since_break = 0;
-  prof_office = 0;
   cont_classa = 0;
   cont_classb = 0;
-  wait_classa = 0;
-  wait_classb = 0;
+  
 
   /* Read in the data file and initialize the student array */
   FILE *fp;
@@ -133,7 +131,7 @@ void *professorthread(void *junk)
 
     //Condition to check if professor can take a break
     if ((students_since_break >= professor_LIMIT ||
-         !prof_office) &&
+         prof_office==1) &&
         (students_in_office == 0))
     {
       take_break();
@@ -142,7 +140,7 @@ void *professorthread(void *junk)
     }
 
     //check if professor can come
-    if (prof_office != 0)
+    if (prof_office==1)
     {
       prof_office = 1;
       /*lock the thread - Professor is not in the office.*/
@@ -162,25 +160,24 @@ void *professorthread(void *junk)
  */
 void classa_enter()
 {
-  //critical region begins
   //lock acess to shared variables
   pthread_mutex_lock(&mutex);
 
   wait_classa = wait_classa + 1;
 
   //Students need to wait until professor is available
-  while (students_since_break >= professor_LIMIT || !prof_office)
-  {
-    pthread_cond_wait(&prof_inside, &mutex);
-  }
+    while (students_since_break >= professor_LIMIT || prof_office == 1)
+    {
+      pthread_cond_wait(&prof_inside, &mutex);
+    }
 
-  //Students need to wait until they are allowed to enter
-  while (!((students_in_office < MAX_SEATS) && 
-        ((wait_classb == 0) || (cont_classa < MAX_CLASSAB)) && 
-        (!classb_inoffice)))
-  {
-    pthread_cond_wait(&student_out,&mutex);
-  }
+    //Students need to wait until they are allowed to enter
+    while (!((students_in_office < MAX_SEATS) &&
+           ((wait_classb == 0) || (cont_classa < MAX_CLASSAB))&&
+           (!classb_inoffice)))
+    {
+      pthread_cond_wait(&student_out, &mutex);
+    }
 
   students_in_office += 1;
   students_since_break += 1;
@@ -190,6 +187,7 @@ void classa_enter()
   wait_classa -= 1;
 
   pthread_mutex_unlock(&mutex);
+ //critical region ends
 }
 
 /* Code executed by a class B student to enter the office.
@@ -198,34 +196,33 @@ void classa_enter()
  */
 void classb_enter()
 {
-//  //critical region begins
-//   //lock acess to shared variables
-//   pthread_mutex_lock(&mutex);
+  //lock acess to shared variables
+  pthread_mutex_lock(&mutex);
 
-//   wait_classb = wait_classb + 1;
+  wait_classb = wait_classb + 1;
 
-//   //Students need to wait until professor is available
-//   while (students_since_break >= professor_LIMIT || !prof_office)
-//   {
-//     pthread_cond_wait(&prof_inside, &mutex);
-//   }
+  //Students need to wait until professor is available
+    while (students_since_break >= professor_LIMIT || prof_office == 1)
+    {
+      pthread_cond_wait(&prof_inside, &mutex);
+    }
 
-//   //Students need to wait until they are allowed to enter
-//   while (!((students_in_office < MAX_SEATS) && 
-//         ((wait_classa == 0) || (cont_classb < MAX_CLASSAB)) && 
-//         (!classa_inoffice)))
-//   {
-//     pthread_cond_wait();
-//   }
+    //Students need to wait until they are allowed to enter
+    while (!((students_in_office < MAX_SEATS) &&
+           ((wait_classa == 0) || (cont_classb < MAX_CLASSAB))&&
+           (!classa_inoffice)))
+    {
+      pthread_cond_wait(&student_out, &mutex);
+    }
 
-//   students_in_office += 1;
-//   students_since_break += 1;
-//   classa_inoffice += 1;
-//   cont_classa = 0;
-//   cont_classb += 1;
-//   wait_classb -= 1;
+  students_in_office += 1;
+  students_since_break += 1;
+  classb_inoffice += 1;
+  cont_classa = 0;
+  cont_classb += 1;
+  wait_classb -= 1;
 
-//   pthread_mutex_unlock(&mutex);
+  pthread_mutex_unlock(&mutex);
 }
 
 /* Code executed by a student to simulate the time he spends in the office asking questions
@@ -269,7 +266,7 @@ static void classb_leave()
   pthread_mutex_lock(&mutex);
 
   students_in_office -= 1;
-  classa_inoffice -= 1;
+  classb_inoffice -= 1;
 
   pthread_cond_signal(&student_out);
 
@@ -425,3 +422,4 @@ int main(int nargs, char **args)
 
   return 0;
 }
+
