@@ -40,11 +40,18 @@
 #define CLASSD 3
 #define CLASSE 4
 
-//Lock and unlock the mutex by finding a critical region, lock before critical region starts, and unlock after the critical region ends
+/*
+  Lock and unlock the mutex by finding a critical region, 
+  lock before critical region starts, and 
+  unlock after the critical region ends.
+*/
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 //Condition Variable that signals if professor is inside the office
 pthread_cond_t prof_inside = PTHREAD_COND_INITIALIZER;
+
+//Condition Variable that signals if the student comes out of the office.
+pthread_cond_t student_out = PTHREAD_COND_INITIALIZER;
 
 static int students_in_office;   /* Total numbers of students currently in the office */
 static int classa_inoffice;      /* Total numbers of students from class A currently in the office */
@@ -52,8 +59,8 @@ static int classb_inoffice;      /* Total numbers of students from class B in th
 
 static int students_since_break = 0; /*students after the break*/
 static int prof_office; /*professor if not inside the office*/
-static int cont_classa; /*consecutive students from class A*/
-static int cont_classb; /*consecutive students from class B*/
+// static int cont_classa; /*consecutive students from class A*/
+// static int cont_classb; /*consecutive students from class B*/
 typedef struct 
 {
   int arrival_time;  // time between the arrival of this student and the previous student
@@ -73,8 +80,8 @@ static int initialize(student_info *si, char *filename)
   classb_inoffice = 0;
   students_since_break = 0;
   prof_office = 0;
-  cont_classa = 0;
-  cont_classb = 0;
+  // cont_classa = 0;
+  // cont_classb = 0;
 
   /* Read in the data file and initialize the student array */
   FILE *fp;
@@ -221,12 +228,19 @@ static void classa_leave()
     perror("Student from class A didn't lock the mutex.\n");
     exit(0); //exit if mutex lock is unsucessful
   }
-
-
-
+  
   students_in_office -= 1;
   classa_inoffice -= 1;
 
+  pthread_cond_signal(&student_out);
+
+  //End of critical region
+  //Unlock access to shared variables
+  if(pthread_mutex_unlock(&mutex)!=0)
+  {
+    perror("Student from class A didn't unlock the mutex.\n");
+    exit(0); //exit if mutex lock is unsucessful
+  }
 }
 
 /* Code executed by a class B student when leaving the office.
