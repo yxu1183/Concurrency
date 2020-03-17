@@ -33,7 +33,7 @@
 #define MAX_SEATS 3        /* Number of seats in the professor's office */
 #define professor_LIMIT 10 /* Number of students the professor can help before he needs a break */
 #define MAX_STUDENTS 1000  /* Maximum number of students in the simulation */
-#define MAX_CLASSAB 5      /*Maximum number of students from class A & B who can enter the office consecutively*/
+#define MAX_CLASSAB 5      /*Maximum number of students from class A who can enter the office*/
 
 #define CLASSA 0
 #define CLASSB 1
@@ -56,11 +56,11 @@ static int classa_inoffice;    /* Total numbers of students from class A current
 static int classb_inoffice;    /* Total numbers of students from class B in the office */
 
 static int students_since_break = 0; /*students after the break*/
-int prof_office = 0;              /*professor if not inside the office*/
-int cont_classa = 0;              /*consecutive students from class A*/
-int cont_classb = 0;              /*consecutive students from class B*/
-int wait_classa = 0;              /*students from class A waiting outside*/
-int wait_classb = 0;              /*students from class B waiting outside*/
+static int prof_office;              /*professor if not inside the office*/
+static int cont_classa;              /*consecutive students from class A*/
+static int cont_classb;              /*consecutive students from class B*/
+static int wait_classa;              /*students from class A waiting outside*/
+static int wait_classb;              /*students from class B waiting outside*/
 
 typedef struct
 {
@@ -81,6 +81,11 @@ static int initialize(student_info *si, char *filename)
   classa_inoffice = 0;
   classb_inoffice = 0;
   students_since_break = 0;
+  prof_office = 0;
+  cont_classa = 0;
+  cont_classb = 0;
+  wait_classa = 0;
+  wait_classb = 0;
 
   /* Read in the data file and initialize the student array */
   FILE *fp;
@@ -114,11 +119,22 @@ static void take_break()
   students_since_break = 0;
 }
 
+bool prof_not_arrive_office()
+{
+  bool flag;
+
+  if(prof_office == 1)
+  {
+    flag = true;
+  }
+  return flag;
+}
+
 bool cond_classa_enter()
 {
   bool flag;
 
-  if(!((cont_classa < MAX_CLASSAB || wait_classb == 0) && (classb_inoffice == 1) && (students_in_office < MAX_SEATS)))
+  if(!((cont_classa < MAX_CLASSAB || wait_classb == 0) && (!classb_inoffice) && (students_in_office < MAX_SEATS)))
   {
     flag = true;
   }
@@ -150,20 +166,20 @@ void *professorthread(void *junk)
     //lock access to shared variables
     pthread_mutex_lock(&mutex);
 
-    //Condition to check if professor can take a break
-    if ((students_since_break >= professor_LIMIT) &&
-        (students_in_office == 0))
-    {
-      take_break();
-      /*lock the thread - Professor is in break.*/
-      pthread_cond_signal(&prof_inside);
-    }
-
-    //condition to check if professor can come
-    if (prof_office == 1)
+  //condition to check if professor can come
+    if (prof_not_arrive_office())
     {
       prof_office = 1;
       /*lock the thread - Professor is not in the office.*/
+      pthread_cond_signal(&prof_inside);
+    }
+
+    //Condition to check if professor can take a break
+    if ((students_since_break >= professor_LIMIT || prof_not_arrive_office()) &&
+        students_in_office == 0)
+    {
+      take_break();
+      /*lock the thread - Professor is in break.*/
       pthread_cond_signal(&prof_inside);
     }
 
