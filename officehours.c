@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
+#include <stdbool.h>
 
 /*** Constants that define parameters of the simulation ***/
 
@@ -55,11 +56,11 @@ static int classa_inoffice;    /* Total numbers of students from class A current
 static int classb_inoffice;    /* Total numbers of students from class B in the office */
 
 static int students_since_break = 0; /*students after the break*/
-static int prof_office;              /*professor if not inside the office*/
-static int cont_classa;              /*consecutive students from class A*/
-static int cont_classb;              /*consecutive students from class B*/
-static int wait_classa;              /*students from class A waiting outside*/
-static int wait_classb;              /*students from class B waiting outside*/
+int prof_office = 0;              /*professor if not inside the office*/
+int cont_classa = 0;              /*consecutive students from class A*/
+int cont_classb = 0;              /*consecutive students from class B*/
+int wait_classa = 0;              /*students from class A waiting outside*/
+int wait_classb = 0;              /*students from class B waiting outside*/
 
 typedef struct
 {
@@ -68,6 +69,7 @@ typedef struct
   int student_id;
   int class;
 } student_info;
+
 
 /* Called at beginning of simulation.  
  * TODO: Create/initialize all synchronization
@@ -79,11 +81,6 @@ static int initialize(student_info *si, char *filename)
   classa_inoffice = 0;
   classb_inoffice = 0;
   students_since_break = 0;
-  prof_office = 0;
-  cont_classa = 0;
-  cont_classb = 0;
-  wait_classa = 0;
-  wait_classb = 0;
 
   /* Read in the data file and initialize the student array */
   FILE *fp;
@@ -117,6 +114,28 @@ static void take_break()
   students_since_break = 0;
 }
 
+bool cond_classa_enter()
+{
+  bool flag;
+
+  if(!((cont_classa < MAX_CLASSAB || wait_classb == 0) && (classb_inoffice == 1) && (students_in_office < MAX_SEATS)))
+  {
+    flag = true;
+  }
+  return flag;
+}
+
+bool cond_classb_enter()
+{
+  bool flag;
+
+  if(!((cont_classb < MAX_CLASSAB || wait_classa == 0) && (!classa_inoffice) && (students_in_office < MAX_SEATS)))
+  {
+    flag = true;
+  }
+  return flag;
+}
+
 /* Code for the professor thread.This is fully implemented except for synchronization
  * with the students.See the comments within the function for details.
  */
@@ -132,8 +151,7 @@ void *professorthread(void *junk)
     pthread_mutex_lock(&mutex);
 
     //Condition to check if professor can take a break
-    if ((students_since_break >= professor_LIMIT ||
-         prof_office == 1) &&
+    if ((students_since_break >= professor_LIMIT) &&
         (students_in_office == 0))
     {
       take_break();
@@ -141,7 +159,7 @@ void *professorthread(void *junk)
       pthread_cond_signal(&prof_inside);
     }
 
-    //check if professor can come
+    //condition to check if professor can come
     if (prof_office == 1)
     {
       prof_office = 1;
@@ -162,21 +180,11 @@ void *professorthread(void *junk)
  */
 void classa_enter()
 {
-  while (cont_classa == MAX_CLASSAB)
-  {
-    pthread_cond_wait(&student_out, &mutex);
-    cont_classa = 0;
-  }
-
   //lock acess to shared variables
   pthread_mutex_lock(&mutex);
 
   wait_classa += 1;
-  while (cont_classb == MAX_CLASSAB)
-  {
-    pthread_cond_signal(&student_out);
-  }
-
+  
   //Students need to wait until professor is available
   while (students_since_break >= professor_LIMIT || prof_office == 1)
   {
@@ -184,8 +192,7 @@ void classa_enter()
   }
 
   //Students need to wait until they are allowed to enter
-  while (!((students_in_office < MAX_SEATS) &&
-           (!classb_inoffice)))
+  while(cond_classa_enter())
   {
     pthread_cond_wait(&student_out, &mutex);
   }
@@ -207,20 +214,11 @@ void classa_enter()
  */
 void classb_enter()
 {
-  while (cont_classa == MAX_CLASSAB)
-  {
-    pthread_cond_wait(&student_out, &mutex);
-    cont_classb = 0;
-  }
-
   //lock acess to shared variables
   pthread_mutex_lock(&mutex);
-  wait_classb += 1;
-  while (cont_classa == MAX_CLASSAB)
-  {
-    pthread_cond_signal(&student_out);
-  }
 
+  wait_classb += 1;
+  
   //Students need to wait until professor is available
   while (students_since_break >= professor_LIMIT || prof_office == 1)
   {
@@ -228,11 +226,11 @@ void classb_enter()
   }
 
   //Students need to wait until they are allowed to enter
-  while (!((students_in_office < MAX_SEATS) &&
-           (!classa_inoffice)))
+   while(cond_classb_enter())
   {
     pthread_cond_wait(&student_out, &mutex);
   }
+
   students_in_office += 1;
   students_since_break += 1;
   classb_inoffice += 1;
@@ -241,6 +239,7 @@ void classb_enter()
   wait_classb -= 1;
 
   pthread_mutex_unlock(&mutex);
+  //critical region ends
 }
 
 /* Code executed by a student to simulate the time he spends in the office asking questions
@@ -440,5 +439,4 @@ int main(int nargs, char **args)
 
   return 0;
 }
-
 
