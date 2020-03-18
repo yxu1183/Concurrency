@@ -134,7 +134,9 @@ bool cond_classa_enter()
 {
   bool flag;
 
-  if(!((cont_classa < MAX_CLASSAB || wait_classb == 0) && (!classb_inoffice) && (students_in_office < MAX_SEATS)))
+  if(!((cont_classa < MAX_CLASSAB || wait_classb == 0) && 
+    (!classb_inoffice) && 
+    (students_in_office < MAX_SEATS)))
   {
     flag = true;
   }
@@ -145,7 +147,9 @@ bool cond_classb_enter()
 {
   bool flag;
 
-  if(!((cont_classb < MAX_CLASSAB || wait_classa == 0) && (!classa_inoffice) && (students_in_office < MAX_SEATS)))
+  if(!((cont_classb < MAX_CLASSAB || wait_classa == 0) && 
+    (!classa_inoffice) && 
+    (students_in_office < MAX_SEATS)))
   {
     flag = true;
   }
@@ -200,9 +204,9 @@ void classa_enter()
   pthread_mutex_lock(&mutex);
 
   wait_classa += 1;
-  
+
   //Students need to wait until professor is available
-  while (students_since_break >= professor_LIMIT || prof_office == 1)
+  while (students_since_break >= professor_LIMIT || prof_not_arrive_office())
   {
     pthread_cond_wait(&prof_inside, &mutex);
   }
@@ -236,7 +240,7 @@ void classb_enter()
   wait_classb += 1;
   
   //Students need to wait until professor is available
-  while (students_since_break >= professor_LIMIT || prof_office == 1)
+  while (students_since_break >= professor_LIMIT || prof_not_arrive_office())
   {
     pthread_cond_wait(&prof_inside, &mutex);
   }
