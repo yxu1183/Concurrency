@@ -1,22 +1,9 @@
-// Copyright (c) 2020 Trevor Bakker
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-/// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+/*
+  Concurrency Assignment
+  Group Members:
+  Yunika Upadhayaya, ID: 1001633183 
+  Suman Thapa Magar, ID: 1001643016
+*/
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -33,7 +20,7 @@
 #define MAX_SEATS 3        /* Number of seats in the professor's office */
 #define professor_LIMIT 10 /* Number of students the professor can help before he needs a break */
 #define MAX_STUDENTS 1000  /* Maximum number of students in the simulation */
-#define MAX_CLASSAB 5      /*Maximum number of students from class A who can enter the office*/
+#define MAX_CLASSAB 5      /*Maximum number of students from class A & B who can enter the office*/
 
 #define CLASSA 0
 #define CLASSB 1
@@ -56,11 +43,11 @@ static int classa_inoffice;    /* Total numbers of students from class A current
 static int classb_inoffice;    /* Total numbers of students from class B in the office */
 
 static int students_since_break = 0; /*students after the break*/
-int prof_office = 0;                 /*professor if not inside the office*/
-int cont_classa = 0;                 /*consecutive students from class A*/
-int cont_classb = 0;                 /*consecutive students from class B*/
-int wait_classa = 0;                 /*students from class A waiting outside*/
-int wait_classb = 0;                 /*students from class B waiting outside*/
+static int prof_office;              /*professor if not inside the office*/
+static int cont_classa;              /*consecutive students from class A*/
+static int cont_classb;              /*consecutive students from class B*/
+static int wait_classa;              /*students from class A waiting outside*/
+static int wait_classb;              /*students from class B waiting outside*/
 
 typedef struct
 {
@@ -80,11 +67,11 @@ static int initialize(student_info *si, char *filename)
   classa_inoffice = 0;
   classb_inoffice = 0;
   students_since_break = 0;
-  // prof_office = 0;
-  // cont_classa = 0;
-  // cont_classb = 0;
-  // wait_classa = 0;
-  // wait_classb = 0;
+  prof_office = 0;
+  cont_classa = 0;
+  cont_classb = 0;
+  wait_classa = 0;
+  wait_classb = 0;
 
   pthread_cond_init(&prof_inside, NULL);
   pthread_cond_init(&student_out, NULL);
@@ -122,6 +109,7 @@ static void take_break()
   students_since_break = 0;
 }
 
+/*Function to check if the students of class B are present or not*/ 
 bool no_classb()
 {
   bool flag;
@@ -133,6 +121,7 @@ bool no_classb()
   return flag;
 }
 
+/*Function to check if the students of class A are presesnt or not*/
 bool no_classa()
 {
   bool flag;
@@ -144,6 +133,7 @@ bool no_classa()
   return flag;
 }
 
+/*Function to check if professor has arrived or not*/
 bool prof_not_arrive_office()
 {
   bool flag;
@@ -155,6 +145,8 @@ bool prof_not_arrive_office()
   return flag;
 }
 
+/*Function to check if students from class A can enter or not*/
+/*returns true if cannot enter*/
 bool cond_classa_enter()
 {
   bool flag;
@@ -168,6 +160,8 @@ bool cond_classa_enter()
   return flag;
 }
 
+/*Function to check if students from class B can enter or not*/
+/*returns true if cannot enter*/
 bool cond_classb_enter()
 {
   bool flag;
@@ -182,7 +176,7 @@ bool cond_classb_enter()
 }
 
 /* Code for the professor thread.This is fully implemented except for synchronization
- * with the students.See the comments within the function for details.
+ * with the students.
  */
 void *professorthread(void *junk)
 {
@@ -196,19 +190,20 @@ void *professorthread(void *junk)
     pthread_mutex_lock(&mutex);
 
     //Condition to check if professor can take a break
+    //take break if no students or after dealing with 10 students
     if ((students_since_break == professor_LIMIT || prof_not_arrive_office()) &&
         students_in_office == 0)
     {
       take_break();
-      /*lock the thread - Professor is in break.*/
+      /*Professor is in break.*/
       pthread_cond_broadcast(&prof_inside);
     }
 
-    //condition to check if professor can come
+    //condition to check if professor can come in office
     if (prof_not_arrive_office())
     {
       prof_office = 1;
-      /*lock the thread - Professor is not in the office.*/
+      /*Professor is not in the office.*/
       pthread_cond_broadcast(&prof_inside);
     }
 
@@ -228,24 +223,27 @@ void classa_enter()
   //lock acess to shared variables
   pthread_mutex_lock(&mutex);
 
-  wait_classa += 1;
+  wait_classa += 1;//increase the queue for class A outside the office
 
-  do
+  for(;;)
   {
     //Students need to wait until professor is available
-    while (students_since_break >= professor_LIMIT || prof_not_arrive_office())
+    while(students_since_break >= professor_LIMIT || prof_not_arrive_office())
     {
       pthread_cond_wait(&prof_inside, &mutex);
     }
 
     //Students need to wait until they are allowed to enter
-    while (cond_classa_enter())
+    while(cond_classa_enter())
     {
       pthread_cond_wait(&student_out, &mutex);
     }
-  } while((students_since_break >= professor_LIMIT ||
+    
+    //otherwise they can enter the office
+    if(!((students_since_break >= professor_LIMIT ||
             prof_not_arrive_office()) ||
-           (cond_classa_enter()));
+           (cond_classa_enter()))) break;
+  }
 
   students_in_office += 1;
   students_since_break += 1;
@@ -254,8 +252,9 @@ void classa_enter()
   cont_classa += 1;
   wait_classa -= 1;
 
-  pthread_mutex_unlock(&mutex);
   //critical region ends
+  //unlock access to shared variables
+  pthread_mutex_unlock(&mutex);
 }
 
 /* Code executed by a class B student to enter the office.
@@ -267,9 +266,9 @@ void classb_enter()
   //lock acess to shared variables
   pthread_mutex_lock(&mutex);
 
-  wait_classb += 1;
+  wait_classb += 1;//increase the queue for class B outside the office
 
-  do
+  for(;;)
   {
     //Students need to wait until professor is available
     while(students_since_break >= professor_LIMIT || prof_not_arrive_office())
@@ -282,9 +281,12 @@ void classb_enter()
     {
       pthread_cond_wait(&student_out, &mutex);
     }
-  } while ((students_since_break >= professor_LIMIT ||
+
+    //otherwise they can enter the office
+    if(!((students_since_break >= professor_LIMIT ||
             prof_not_arrive_office()) ||
-           (cond_classb_enter()));
+           (cond_classb_enter()))) break;
+  }
 
   students_in_office += 1;
   students_since_break += 1;
@@ -293,8 +295,9 @@ void classb_enter()
   cont_classb += 1;
   wait_classb -= 1;
 
-  pthread_mutex_unlock(&mutex);
   //critical region ends
+  //unlock access to shared variables
+  pthread_mutex_unlock(&mutex);
 }
 
 /* Code executed by a student to simulate the time he spends in the office asking questions
@@ -313,12 +316,12 @@ static void classa_leave()
 {
   //critical region begins
   //lock access to shared variables
-
   pthread_mutex_lock(&mutex);
 
   students_in_office -= 1;
   classa_inoffice -= 1;
 
+  //student from class A can go out of office.
   pthread_cond_broadcast(&student_out);
 
   //End of critical region
@@ -334,12 +337,12 @@ static void classb_leave()
 {
   //critical region begins
   //lock access to shared variables
-
   pthread_mutex_lock(&mutex);
 
   students_in_office -= 1;
   classb_inoffice -= 1;
 
+  //student from class B can go out of office
   pthread_cond_broadcast(&student_out);
 
   //End of critical region
