@@ -189,6 +189,14 @@ void *professorthread(void *junk)
     //lock access to shared variables
     pthread_mutex_lock(&mutex);
 
+    //condition to check if professor can come in office
+    if (prof_not_arrive_office())
+    {
+      prof_office = 1;
+      /*Professor is not in the office.*/
+      pthread_cond_broadcast(&prof_inside);
+    }
+
     //Condition to check if professor can take a break
     //take break if no students or after dealing with 10 students
     if ((students_since_break == professor_LIMIT || prof_not_arrive_office()) &&
@@ -196,14 +204,6 @@ void *professorthread(void *junk)
     {
       take_break();
       /*Professor is in break.*/
-      pthread_cond_broadcast(&prof_inside);
-    }
-
-    //condition to check if professor can come in office
-    if (prof_not_arrive_office())
-    {
-      prof_office = 1;
-      /*Professor is not in the office.*/
       pthread_cond_broadcast(&prof_inside);
     }
 
