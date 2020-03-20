@@ -1,5 +1,5 @@
 # Concurrency
-### Operating System/Assignment-2: Created by Dr. Trevor Bakker
+### Operating System/Assignment-2: Created by [Dr. Trevor Bakker](https://github.com/trevorbakker-uta)
 
 ## Descirption
 Prallel Programming to help professor schedule his office hours for two different classes- class A and B.
