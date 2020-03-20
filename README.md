@@ -23,7 +23,7 @@ Prallel Programming to help professor schedule his office hours for two differen
 * Locking and unlocking the threads as per given conditions.
 
 ## Compilation Instructions
-The application is builtin in an omega server at UTA.
+The application is built in an omega server at UTA.
 In terminal:
 ```
 gcc officehours.c -o office hours -lpthread
