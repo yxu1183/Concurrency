@@ -31,8 +31,8 @@ officehours.c sample.txt
 ```
 
 ## Acknowledgements
-* [Suman Thapa Magar] (https://github.com/suman2020) - Team Member
-* [Dr. Trevor Bakker](https://github.com/trevorbakker-uta) for providing small stub [program](https://github.com/CSE3320/Office-Hours-  Assignment) to get started and his guidance throughout the assignment. 
+* [Suman Thapa Magar](https://github.com/suman2020) - Team Member
+* [Dr. Trevor Bakker](https://github.com/trevorbakker-uta) for providing small stub [program](https://github.com/CSE3320/Office-Hours-Assignment) to get started and his guidance throughout the assignment. 
 
 
 
