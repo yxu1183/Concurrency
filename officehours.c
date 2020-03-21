@@ -183,14 +183,14 @@ void *professorthread(void *junk)
   printf("The professor arrived and is starting his office hours\n");
 
   /* Loop while waiting for students to arrive. */
-  while (1)
+  while(1)
   {
     //critical region starts
     //lock access to shared variables
     pthread_mutex_lock(&mutex);
 
     //condition to check if professor can come in office
-    if (prof_not_arrive_office())
+    if(prof_not_arrive_office())
     {
       prof_office = 1;
       /*Professor is not in the office.*/
@@ -277,7 +277,7 @@ void classb_enter()
     }
 
     //Students need to wait until they are allowed to enter
-    while (cond_classb_enter())
+    while(cond_classb_enter())
     {
       pthread_cond_wait(&student_out, &mutex);
     }
