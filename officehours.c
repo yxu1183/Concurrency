@@ -309,8 +309,7 @@ static void ask_questions(int t)
 }
 
 /* Code executed by a class A student when leaving the office.
- * You need to implement this.  Do not delete the assert() statements,
- * but feel free to add as many of your own as you like.
+ * You need to implement this.  Do not delete the assert() statements.
  */
 static void classa_leave()
 {
