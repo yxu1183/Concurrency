@@ -26,7 +26,7 @@ Prallel Programming to help professor schedule his office hours for two differen
 The application is built in an omega server at UTA.
 In terminal:
 ```
-gcc officehours.c -o office hours -lpthread
+gcc officehours.c -o officehours -lpthread
 officehours.c sample.txt
 ```
 
