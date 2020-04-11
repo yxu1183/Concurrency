@@ -27,7 +27,7 @@ The application is built in an omega server at UTA.
 In terminal:
 ```
 gcc officehours.c -o officehours -lpthread
-officehours.c sample.txt
+officehours sample.txt
 ```
 
 ## Acknowledgements
