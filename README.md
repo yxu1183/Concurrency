@@ -17,7 +17,7 @@ Parallel Programming to help professor schedule his office hours for two differe
 * Second column is the time between the arrival of a student and the previous student.
 * Third column is the number of seconds student spends time with professor asking questions.
 
-## Things I learned
+## Things learned
 * Handling multiple threads in an effective way.
 * Correct use and placement of mutex. 
 * Locking and unlocking the threads as per given conditions.
